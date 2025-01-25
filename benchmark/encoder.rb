@@ -1,7 +1,11 @@
-require "benchmark/ips"
-require "json"
-require "date"
-require "oj"
+require "bundler/inline"
+
+gemfile do
+  gem "benchmark-ips"
+  gem "json", path: ".."
+  gem "date"
+  gem "oj"
+end
 
 Oj.default_options = Oj.default_options.merge(mode: :compat)
 

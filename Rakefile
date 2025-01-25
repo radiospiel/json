@@ -184,5 +184,18 @@ else
   task :release => :build
 end
 
+namespace :benchmark do
+  task :encoder do
+    sh "ruby benchmark/encoder.rb"
+  end
+
+  task :parser do
+    sh "ruby benchmark/parser.rb"
+  end
+end
+
+desc "Run benchmarks"
+task :benchmark => [ "benchmark:encoder", "benchmark:parser" ]
+
 desc "Compile in the the source directory"
 task :default => [ :clean, :test ]
