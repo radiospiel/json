@@ -76,12 +76,12 @@ end
 # benchmark_encoding "mostly utf8", ([("€" * 3333)] * 500)
 
 # On these benchmarks we perform well, we're on par or a bit better.
-# benchmark_encoding "integers", (1_000_000..1_001_000).to_a, except: %i(json_state)
-benchmark_encoding "integers", (1000..1010).to_a, except: %i(json_state)
-# benchmark_encoding "integers", (0..20).to_a, except: %i(json_state)
-# benchmark_encoding "activitypub.json", JSON.load_file("#{__dir__}/data/activitypub.json")
-# benchmark_encoding "citm_catalog.json", JSON.load_file("#{__dir__}/data/citm_catalog.json")
-# benchmark_encoding "twitter.json", JSON.load_file("#{__dir__}/data/twitter.json")
+benchmark_encoding "small_integers", (0..100).to_a, except: %i(json_state)
+benchmark_encoding "integers", (1_000_000..1_001_000).to_a, except: %i(json_state)
+benchmark_encoding "large_integers", (4611686018427387603..4611686018427387903).to_a, except: %i(json_state)
+benchmark_encoding "activitypub.json", JSON.load_file("#{__dir__}/data/activitypub.json")
+benchmark_encoding "citm_catalog.json", JSON.load_file("#{__dir__}/data/citm_catalog.json")
+benchmark_encoding "twitter.json", JSON.load_file("#{__dir__}/data/twitter.json")
 
 # This benchmark spent the overwhelming majority of its time in `ruby_dtoa`. We rely on Ruby's implementation
 # which uses a relatively old version of dtoa.c from David M. Gay.
