@@ -675,4 +675,30 @@ class JSONGeneratorTest < Test::Unit::TestCase
     object = Object.new
     assert_equal object.object_id.to_json, JSON.generate(object, strict: true, as_json: :object_id)
   end
+  
+  def test_long_min
+    numbers = [
+      0,
+      1,
+      -1,
+      9,
+      -9,
+      13,
+      -13,
+      91,
+      -91,
+      513,
+      -513,
+      591,
+      -591,
+      
+      
+      -4611686018427387904,  # This is the smalled number that goes thru fltoa
+      4611686018427387903,   # This is the largest number that goes thru fltoa
+    ]
+    
+    numbers.each do |number|
+      assert_equal "[#{number}]", JSON.generate([number])
+    end
+  end
 end

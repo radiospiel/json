@@ -167,21 +167,126 @@ static inline void fbuffer_append_char(FBuffer *fb, char newchr)
     fb->len++;
 }
 
+static void myassert(bool flag, const char* msg) 
+{
+    if(flag) {
+        return;
+    }
+        
+    printf("*** %s\n", msg);
+    abort();
+}
+
+inline void assert_ptr_is_aligned(void* dest, int alignment) {
+    myassert(((unsigned)dest) % alignment == 0, "dest should be aligned");
+}
+
+inline void memcpy2(void* dest, const void* src) {
+    // assert_ptr_is_aligned(dest, 2);
+     *((short*)dest) = *((const short*)src);
+}
+
+#define _memcpy2(d, s) *((short*)(void*)d) = *((const short*)(const void*)s)
+
+
 static long fltoa(long number, char *buf)
 {
-    static const char digits[] = "0123456789";
-    long sign = number;
-    char* tmp = buf;
+    /*
+     * The number is in the range
+     *
+     * - -4611686018427387904 (i.e. 0xc000000000000000)
+     * - 4611686018427387903 (i.e. 0x3fffffffffffffff)
+    */
+    
+    // printf("fltoa(%ld)\n", number);
 
-    if (sign < 0) number = -number;
-    do *tmp-- = digits[number % 10]; while (number /= 10);
-    if (sign < 0) *tmp-- = '-';
-    return buf - tmp;
+#if 1
+    static bool checked_size = false;
+    if(!checked_size) {
+        myassert(sizeof(short) == 2, "We are assuming short has 2 characters\n");
+        checked_size = true;
+    }
+
+  // Lookup table for decimal digit pairs
+  static const char lookup_table[200] = {
+    '0', '0', '0', '1', '0', '2', '0', '3', '0', '4', '0', '5', '0', '6', '0',
+    '7', '0', '8', '0', '9', '1', '0', '1', '1', '1', '2', '1', '3', '1', '4',
+    '1', '5', '1', '6', '1', '7', '1', '8', '1', '9', '2', '0', '2', '1', '2',
+    '2', '2', '3', '2', '4', '2', '5', '2', '6', '2', '7', '2', '8', '2', '9',
+    '3', '0', '3', '1', '3', '2', '3', '3', '3', '4', '3', '5', '3', '6', '3',
+    '7', '3', '8', '3', '9', '4', '0', '4', '1', '4', '2', '4', '3', '4', '4',
+    '4', '5', '4', '6', '4', '7', '4', '8', '4', '9', '5', '0', '5', '1', '5',
+    '2', '5', '3', '5', '4', '5', '5', '5', '6', '5', '7', '5', '8', '5', '9',
+    '6', '0', '6', '1', '6', '2', '6', '3', '6', '4', '6', '5', '6', '6', '6',
+    '7', '6', '8', '6', '9', '7', '0', '7', '1', '7', '2', '7', '3', '7', '4',
+    '7', '5', '7', '6', '7', '7', '7', '8', '7', '9', '8', '0', '8', '1', '8',
+    '2', '8', '3', '8', '4', '8', '5', '8', '6', '8', '7', '8', '8', '8', '9',
+    '9', '0', '9', '1', '9', '2', '9', '3', '9', '4', '9', '5', '9', '6', '9',
+    '7', '9', '8', '9', '9'};
+
+
+  if(number == 0) {
+    *buf = '0';
+    return 1;
+  }
+  
+  long sign = number;
+  if (sign < 0) number = -number;
+  
+  char* p = buf;
+
+  if(false && (number >= 10)) {
+      if(((unsigned)p) & 0x01 == 1) {
+          short rem = number % 10; // Extract the last digit
+          number /= 10;
+          *p-- = lookup_table[2 * rem + 1];
+      }
+  }
+  
+  while(number >= 1000) {
+      short rem = number % 100; // Extract the last two digits
+      number /= 100;
+      short rem2 = number % 100; // Extract the now last two digits
+      number /= 100;
+      
+      p -= 4;
+      memcpy2(p+3, lookup_table + (2 * rem));
+      memcpy2(p+1, lookup_table + (2 * rem2));
+  }
+
+  while(number >= 10) {
+      short rem = number % 100; // Extract the last two digits
+      number /= 100;
+      
+      p -= 2;
+      memcpy2(p+1, lookup_table + (2 * rem));
+  }
+
+  if(number > 0) {
+      *p-- = lookup_table[2 * number + 1];
+  }
+
+  if (sign < 0) *p-- = '-';
+  
+  return buf - p;
+#else
+  static const char digits[] = "0123456789";
+
+  long sign = number;
+  if (sign < 0) number = -number;
+  char* tmp = buf;
+  
+  do *tmp-- = digits[number % 10]; while (number /= 10);
+  if (sign < 0) *tmp-- = '-';
+  return buf - tmp;
+#endif
+
 }
 
 #define LONG_BUFFER_SIZE 20
 static void fbuffer_append_long(FBuffer *fb, long number)
 {
+    printf("fbuffer_append_long %lx\n", number);
     char buf[LONG_BUFFER_SIZE];
     char *buffer_end = buf + LONG_BUFFER_SIZE;
     long len = fltoa(number, buffer_end - 1);
