@@ -177,38 +177,45 @@ static void myassert(bool flag, const char* msg)
     abort();
 }
 
-inline void assert_ptr_is_aligned(void* dest, int alignment) {
+static inline void assert_ptr_is_aligned(void* dest, int alignment) {
     myassert(((unsigned)dest) % alignment == 0, "dest should be aligned");
 }
 
 inline void memcpy2(void* dest, const void* src) {
+    // printf("memcpy2 dest = 0x%lx\n", (long)dest);
+    // printf("memcpy2 src = 0x%lx\n", (long)src);
     // assert_ptr_is_aligned(dest, 2);
-     *((short*)dest) = *((const short*)src);
+    *((short*)dest) = *((const short*)src);
 }
 
-#define _memcpy2(d, s) *((short*)(void*)d) = *((const short*)(const void*)s)
-
+inline void memcpy4(void* dest, const void* src) {
+    // printf("memcpy4 dest = 0x%lx\n", (long)dest);
+    // printf("memcpy4 src = 0x%lx\n", (long)src);
+    // assert_ptr_is_aligned(dest, 4);
+    *((unsigned*)dest) = *((const unsigned*)src);
+}
 
 static long fltoa(long number, char *buf)
 {
+    static bool checked_size = false;
+    if(!checked_size) {
+        myassert(sizeof(short) == 2, "We are assuming short has 2 byte\n");
+        myassert(sizeof(int) == 4, "We are assuming short has 4 byte\n");
+        checked_size = true;
+    }
+
     /*
      * The number is in the range
      *
      * - -4611686018427387904 (i.e. 0xc000000000000000)
      * - 4611686018427387903 (i.e. 0x3fffffffffffffff)
     */
-    
-    // printf("fltoa(%ld)\n", number);
 
 #if 1
-    static bool checked_size = false;
-    if(!checked_size) {
-        myassert(sizeof(short) == 2, "We are assuming short has 2 characters\n");
-        checked_size = true;
-    }
+  static const char digits[] = "0123456789";
 
   // Lookup table for decimal digit pairs
-  static const char lookup_table[200] = {
+  static const char two_digits_lut[200] = {
     '0', '0', '0', '1', '0', '2', '0', '3', '0', '4', '0', '5', '0', '6', '0',
     '7', '0', '8', '0', '9', '1', '0', '1', '1', '1', '2', '1', '3', '1', '4',
     '1', '5', '1', '6', '1', '7', '1', '8', '1', '9', '2', '0', '2', '1', '2',
@@ -224,7 +231,6 @@ static long fltoa(long number, char *buf)
     '9', '0', '9', '1', '9', '2', '9', '3', '9', '4', '9', '5', '9', '6', '9',
     '7', '9', '8', '9', '9'};
 
-
   if(number == 0) {
     *buf = '0';
     return 1;
@@ -235,14 +241,6 @@ static long fltoa(long number, char *buf)
   
   char* p = buf;
 
-  if(false && (number >= 10)) {
-      if(((unsigned)p) & 0x01 == 1) {
-          short rem = number % 10; // Extract the last digit
-          number /= 10;
-          *p-- = lookup_table[2 * rem + 1];
-      }
-  }
-  
   while(number >= 1000) {
       short rem = number % 100; // Extract the last two digits
       number /= 100;
@@ -250,8 +248,11 @@ static long fltoa(long number, char *buf)
       number /= 100;
       
       p -= 4;
-      memcpy2(p+3, lookup_table + (2 * rem));
-      memcpy2(p+1, lookup_table + (2 * rem2));
+      
+      int value = (*(short*)(two_digits_lut + (2 * rem)) << 16)
+                | (*(short*)(two_digits_lut + (2 * rem2)));
+
+      memcpy4(p+1, &value);
   }
 
   while(number >= 10) {
@@ -259,11 +260,11 @@ static long fltoa(long number, char *buf)
       number /= 100;
       
       p -= 2;
-      memcpy2(p+1, lookup_table + (2 * rem));
+      memcpy2(p+1, two_digits_lut + (2 * rem));
   }
 
   if(number > 0) {
-      *p-- = lookup_table[2 * number + 1];
+      *p-- = digits[number];
   }
 
   if (sign < 0) *p-- = '-';
@@ -286,7 +287,7 @@ static long fltoa(long number, char *buf)
 #define LONG_BUFFER_SIZE 20
 static void fbuffer_append_long(FBuffer *fb, long number)
 {
-    printf("fbuffer_append_long %lx\n", number);
+    // printf("fbuffer_append_long %lx\n", number);
     char buf[LONG_BUFFER_SIZE];
     char *buffer_end = buf + LONG_BUFFER_SIZE;
     long len = fltoa(number, buffer_end - 1);

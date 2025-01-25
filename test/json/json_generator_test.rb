@@ -691,8 +691,10 @@ class JSONGeneratorTest < Test::Unit::TestCase
       -513,
       591,
       -591,
-      
-      
+      7513,
+      -7513,
+      17591,
+      -17591,
       -4611686018427387904,  # This is the smalled number that goes thru fltoa
       4611686018427387903,   # This is the largest number that goes thru fltoa
     ]

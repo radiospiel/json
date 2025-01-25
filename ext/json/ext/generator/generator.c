@@ -944,7 +944,7 @@ static void generate_json_true(FBuffer *buffer, struct generate_json_data *data,
 
 static void generate_json_fixnum(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
 {
-    printf("*** generate_json_fixnum\n");
+    // printf("*** generate_json_fixnum\n");
     fbuffer_append_long(buffer, FIX2LONG(obj));
 }
 
@@ -958,13 +958,13 @@ static void generate_json_bignum(FBuffer *buffer, struct generate_json_data *dat
 static void generate_json_integer(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
 {
     if (FIXNUM_P(obj)) {
-        printf("*** generate_json_integer as FIXNUM_P\n");
+        // printf("*** generate_json_integer as FIXNUM_P\n");
         generate_json_fixnum(buffer, data, state, obj);
     }
     else {
-        printf("*** generate_json_integer as bignum\n");
+        // printf("*** generate_json_integer as bignum\n");
         generate_json_bignum(buffer, data, state, obj);
-        }
+    }
 }
 #endif
 
