@@ -421,10 +421,15 @@ static void convert_UTF8_to_ASCII_only_JSON(search_state *search, const unsigned
  *
  * This implementation is not suited for ascii_only and script_safe mode.
  */
-#include "./simd.h"
+#include "../vendor/simd.h"
 
+/* The size of a block that we process with a single SIMD implementation. Note 
+ * that the Vector8 size is hardware dependent; it is 16 byte on SSE2 and NEON,
+ * and 8 byte on the default C implementation.
+ */
 #define SIMD_BATCH_SIZE sizeof(Vector8)
 
+/* we only process blocks of that size or larger, in byte, using SIMD. */
 #define SIMD_MINIMAL_SIZE 8
 
 static inline bool needs_json_escaping(const char* ptr) {
