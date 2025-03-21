@@ -175,32 +175,23 @@ static inline void fbuffer_append_char(FBuffer *fb, char newchr)
     fb->len++;
 }
 
-static inline long fultoa(unsigned long number, char *buf)
-{
-    static const char digits[] = "0123456789";
-    char* tmp = buf;
-
-    do *tmp-- = digits[number % 10]; while (number /= 10);
-    return buf - tmp;
-}
-
-#define MAX_CHARS_FOR_LONG 20
-
 /*
  * Appends the decimal string representation of \a number into the buffer.
  */
 static void fbuffer_append_long(FBuffer *fb, long number)
 {
     /*
-     * The to_text_from_ulong implementation produces digits left-to-right, 
-     * allowing us to write directly into the buffer. However, we don't know
-     * how many characters we'll need exactly.
+     * The to_text_from_ulong() function produces digits left-to-right,
+     * allowing us to write directly into the buffer, but we don't know
+     * the number of resulting characters.
      *
-     * However, the number argument is always in the range 0xc000000000000000
-     * to 0x3fffffffffffffff, or, in decimal, -4611686018427387904 to 
-     * 4611686018427387903. We therefore need at most 20 chars in the target
-     * buffer.
+     * We do know, however, that the `number` argument is always in the
+     * range 0xc000000000000000 to 0x3fffffffffffffff, or, in decimal, 
+     * -4611686018427387904 to 4611686018427387903. The max number of chars
+     * generated is therefore 20 (including a potential sign character).
      */
+
+    static const int MAX_CHARS_FOR_LONG = 20;
 
     fbuffer_inc_capa(fb, MAX_CHARS_FOR_LONG);
 
@@ -208,8 +199,8 @@ static void fbuffer_append_long(FBuffer *fb, long number)
         fbuffer_append_reserved_char(fb, '-');
 
         /* 
-         * Since LONG_MIN is not in the valid range, `number = -number` always turns
-         * a negative number into the positive.
+         * Since number is always > LONG_MIN, `-number` will not overflow
+         * and is always the positive abs() value.
          */
         number = -number;
     }
