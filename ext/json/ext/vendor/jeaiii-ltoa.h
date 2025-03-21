@@ -53,8 +53,10 @@ SOFTWARE.
 #ifndef JEAIII_TO_TEXT_H_
 #define JEAIII_TO_TEXT_H_
 
-typedef unsigned int u32_t;
-typedef unsigned long u64_t;
+#include <stdint.h>
+
+typedef uint_fast32_t u32_t;
+typedef uint_fast64_t u64_t;
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
@@ -104,9 +106,9 @@ static struct pair digits_fd[100] =
 
 #undef NUL
 
-static unsigned long mask24 = (u64(1) << 24) - 1;
-static unsigned long mask32 = (u64(1) << 32) - 1;
-static unsigned long mask57 = (u64(1) << 57) - 1;
+static u64_t mask24 = (u64(1) << 24) - 1;
+static u64_t mask32 = (u64(1) << 32) - 1;
+static u64_t mask57 = (u64(1) << 57) - 1;
 
 static 
 char* to_text_from_ulong(char* b, u64_t n) {
