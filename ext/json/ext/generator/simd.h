@@ -3,6 +3,7 @@
 typedef enum {
     SIMD_NONE,
     SIMD_NEON,
+    SIMD_SSE2,
 } SIMD_Implementation;
 
 #ifdef ENABLE_SIMD
@@ -37,6 +38,20 @@ void print_uint8x16(char *msg, uint8x16_t vec) {
 }
 
 #endif /* ARM Neon Support.*/
+
+#if defined(__x86_64__)
+
+#include <emmintrin.h>
+typedef __m128i Vector8;
+
+#define FIND_SIMD_IMPLEMENTATION_DEFINED 1
+SIMD_Implementation find_simd_implementation() {
+    return SIMD_SSE2;
+}
+
+#define HAVE_SIMD_SSE2 1
+
+#endif /* SSE2 Support.*/
 
 /* Other SIMD implementation checks here. */
 

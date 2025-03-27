@@ -464,6 +464,199 @@ static inline unsigned char search_escape_basic_neon(search_state *search)
     return 0;
 }
 #endif /* HAVE_SIMD_NEON */
+
+#ifdef HAVE_SIMD_SSE2
+
+#include <stdint.h>
+
+// TODO This can likely be made generic if we know the stride width of the vector.
+static inline unsigned char search_escape_basic_sse2_next_match(search_state *search) {
+    for(; search->current_match_index < 16 && search->ptr < search->end; ) {
+        unsigned char ch_len = search->maybe_matches[search->current_match_index];
+
+        if (RB_UNLIKELY(ch_len)) {
+            search->returned_from = search->ptr;
+            search_flush(search);
+            return 1;
+        } else {
+            search->ptr++;
+            search->current_match_index++;
+        }
+    }
+    return 0;
+}
+
+static inline __m128i
+sse2_broadcast(const uint8_t c)
+{
+	return _mm_set1_epi8(c);
+}
+
+/* saturating substraction */
+static inline __m128i
+sse2_ssub(const __m128i v1, const __m128i v2)
+{
+	return _mm_subs_epu8(v1, v2);
+}
+
+/* saturating substraction */
+static inline __m128i
+sse2_eq(const __m128i v1, const __m128i v2)
+{
+	return _mm_cmpeq_epi8(v1, v2);
+}
+
+/*
+ * Return true if the high bit of any element is set
+ */
+static inline bool
+sse2_is_highbit_set(const __m128i v)
+{
+	return _mm_movemask_epi8(v) != 0;
+}
+
+/* any bytes less than or equal ch */
+static inline bool
+sse2_has(const __m128i v, const uint8_t ch) {
+    return sse2_is_highbit_set(sse2_eq(v, sse2_broadcast(ch)));
+}
+
+/* any bytes less than or equal ch */
+static inline bool
+sse2_has_le(const __m128i v, const uint8_t ch) {
+    /*
+	 * Use saturating subtraction to find bytes <= c, which will present as
+	 * NUL bytes.
+	 */
+	return sse2_has(sse2_ssub(v, sse2_broadcast(ch)), 0);
+}
+
+static inline bool needs_json_escaping(const char* ptr) {
+    __m128i chunk = _mm_loadu_si128((const __m128i *) ptr);
+    
+    /* Test for dquotes and backslash. */
+    if(sse2_has(chunk, '"')) { return true; }
+    if(sse2_has(chunk, '\\')) { return true; }
+    /* Break for ASCII control characters (0x00-0x1F) */
+    if(sse2_has_le(chunk, 0x1F)) { return true; }
+
+    return false;
+}
+
+
+static unsigned char search_escape_basic_sse2_advance(search_state *search) {
+    /*
+    * The code below implements an SIMD-based algorithm to determine if N bytes at a time
+    * need to be escaped. 
+    * 
+    * Assume the ptr = "Te\sting!" (the double quotes are included in the string)
+    * 
+    * The explanination will be limited to the first 8 bytes of the string for simplicity. However
+    * the vector insructions may work on larger vectors.
+    * 
+    * First, we load three constants 'lower_bound', 'backslash' and 'dblquote" in vector registers.
+    * 
+    * lower_bound: [20 20 20 20 20 20 20 20] 
+    * backslash:   [5C 5C 5C 5C 5C 5C 5C 5C] 
+    * dblquote:    [22 22 22 22 22 22 22 22] 
+    * 
+    * Next we load the first chunk of the ptr: 
+    * [22 54 65 5C 73 74 69 6E] ("  T  e  \  s  t  i  n)
+    * 
+    * First we check if any byte in chunk is less than 32 (0x20). This returns the following vector
+    * as no bytes are less than 32 (0x20):
+    * [0 0 0 0 0 0 0 0]
+    * 
+    * Next, we check if any byte in chunk is equal to a backslash:
+    * [0 0 0 FF 0 0 0 0]
+    * 
+    * Finally we check if any byte in chunk is equal to a double quote:
+    * [FF 0 0 0 0 0 0 0] 
+    * 
+    * Now we have three vectors where each byte indicates if the corresponding byte in chunk
+    * needs to be escaped. We combine these vectors with a series of logical OR instructions.
+    * This is the needs_escape vector and it is equal to:
+    * [FF 0 0 FF 0 0 0 0] 
+    * 
+    * For ARM Neon specifically, we check if the maximum number in the vector is 0. The maximum of
+    * the needs_escape vector is FF. Therefore, we know there is at least one byte that needs to be
+    * escaped.
+    * 
+    * If the maximum of the needs_escape vector is 0, none of the bytes need to be escaped and
+    * we advance pos by the width of the vector.
+    * 
+    * To determine how to escape characters, we look at each value in the needs_escape vector and take
+    * the appropriate action.
+    */
+    while (search->ptr+16 <= search->end) {
+        if(!needs_json_escaping(search->ptr)) {
+            search->ptr += 16;
+            continue;
+        }
+        
+        uint8x16_t maybe_matches = vandq_u8(needs_escape, vdupq_n_u8(0x9));
+        vst1q_u8(search->maybe_matches, maybe_matches);
+
+        search->current_match_index=0;
+        return search_escape_basic_neon_next_match(search);
+    }
+    
+    // There are fewer than 16 bytes left. 
+    unsigned long remaining = (search->end - search->ptr);
+    if (remaining >= 8) {
+        // Flush the buffer so everything up until the last 'remaining' characters are unflushed.
+        search_flush(search);
+
+        FBuffer *buf = search->buffer;
+        fbuffer_inc_capa(buf, 16);
+
+        char *s = (buf->ptr + buf->len);
+
+        memset(s, 'X', 16);
+
+        // Optimistically copy the remaining characters to the output FBuffer. If there are no characters
+        // to escape, then everything ends up in the correct spot. Otherwise it was convenient temporary storage.
+        memcpy(s, search->ptr, remaining);
+
+        uint8x16_t chunk = vld1q_u8((const unsigned char *) s);
+        uint8x16_t result = neon_rules_update(chunk);
+        if (vmaxvq_u8(result) == 0) {
+            // Nothing to escape, ensure search_flush doesn't do anything by setting 
+            // search->cursor to search->ptr.
+            buf->len += remaining;
+            search->ptr = search->end;
+            search->cursor = search->end;
+            return 0;
+        }
+    }
+
+    return 0;
+}
+
+static inline unsigned char search_escape_basic_sse2(search_state *search)
+{
+    if (RB_UNLIKELY(search->returned_from != NULL)) {
+        search->current_match_index += (search->ptr - search->returned_from);
+        search->returned_from = NULL;
+        if (RB_UNLIKELY(search_escape_basic_sse2_next_match(search))) {
+            return 1;
+        }
+    }
+
+    if (search_escape_basic_sse2_advance(search)) {
+        return 1;
+    }
+
+    if (search->ptr < search->end) {
+        return search_escape_basic(search);
+    }
+
+    search_flush(search);
+    return 0;
+}
+
+#endif
+
 #endif /* ENABLE_SIMD */
 
 static const unsigned char script_safe_escape_table[256] = {
@@ -2056,6 +2249,13 @@ void Init_generator(void)
         /* Initialize ARM Neon SIMD Implementation. */
             initialize_simd_neon();
             search_escape_basic_impl = search_escape_basic_neon;
+            break;
+#endif /* HAVE_SIMD_NEON */
+#ifdef HAVE_SIMD_SSE2
+        case SIMD_SSE2:
+        /* Initialize SSE2 SIMD Implementation. */
+            initialize_simd_sse2();
+            search_escape_basic_impl = search_escape_basic_sse2;
             break;
 #endif /* HAVE_SIMD_NEON */
 #endif /* ENABLE_SIMD */

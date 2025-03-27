@@ -21,6 +21,10 @@ else
           $defs.push("-DENABLE_SIMD")
       end
     end
+
+    if RbConfig::CONFIG['host_cpu'] == "x86_64"
+      $defs.push("-DENABLE_SIMD")
+    end
   end
 
   create_header
