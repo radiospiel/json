@@ -23,6 +23,7 @@ typedef struct JSON_Generator_StateStruct {
     bool ascii_only;
     bool script_safe;
     bool strict;
+    bool pretty;
 } JSON_Generator_State;
 
 #ifndef RB_UNLIKELY
@@ -789,28 +790,15 @@ struct hash_foreach_arg {
     int iter;
 };
 
-static int
-json_object_i(VALUE key, VALUE val, VALUE _arg)
+static bool
+json_object_pretty_mode(JSON_Generator_State *state)
 {
-    struct hash_foreach_arg *arg = (struct hash_foreach_arg *)_arg;
-    struct generate_json_data *data = arg->data;
+    /* each state attribute that is used by generate_json_object_pretty must be tested here. */
+    return state->object_nl || state->indent || state->space_before || state->space;
+}
 
-    FBuffer *buffer = data->buffer;
-    JSON_Generator_State *state = data->state;
-
-    long depth = state->depth;
-    int j;
-
-    if (arg->iter > 0) fbuffer_append_char(buffer, ',');
-    if (RB_UNLIKELY(state->object_nl)) {
-        fbuffer_append_str(buffer, state->object_nl);
-    }
-    if (RB_UNLIKELY(state->indent)) {
-        for (j = 0; j < depth; j++) {
-            fbuffer_append_str(buffer, state->indent);
-        }
-    }
-
+static inline void
+generate_json_object_key(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE key) {
     VALUE key_to_s;
     switch(rb_type(key)) {
         case T_STRING:
@@ -833,13 +821,6 @@ json_object_i(VALUE key, VALUE val, VALUE _arg)
     } else {
         generate_json(buffer, data, state, key_to_s);
     }
-    if (RB_UNLIKELY(state->space_before)) fbuffer_append_str(buffer, state->space_before);
-    fbuffer_append_char(buffer, ':');
-    if (RB_UNLIKELY(state->space)) fbuffer_append_str(buffer, state->space);
-    generate_json(buffer, data, state, val);
-
-    arg->iter++;
-    return ST_CONTINUE;
 }
 
 static inline long increase_depth(JSON_Generator_State *state)
@@ -851,16 +832,80 @@ static inline long increase_depth(JSON_Generator_State *state)
     return depth;
 }
 
-static void generate_json_object(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
+static int
+json_object_i_fast(VALUE key, VALUE val, VALUE _arg)
+{
+    struct hash_foreach_arg *arg = (struct hash_foreach_arg *)_arg;
+    struct generate_json_data *data = arg->data;
+
+    FBuffer *buffer = data->buffer;
+    JSON_Generator_State *state = data->state;
+
+    if (arg->iter > 0) fbuffer_append_char(buffer, ',');
+
+    generate_json_object_key(buffer, data, state, key);
+    fbuffer_append_char(buffer, ':');
+    generate_json(buffer, data, state, val);
+
+    arg->iter++;
+    return ST_CONTINUE;
+}
+
+static void
+generate_json_object_fast(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
+{
+    fbuffer_append_char(buffer, '{');
+    increase_depth(state);
+
+    struct hash_foreach_arg arg = {
+        .data = data,
+        .iter = 0,
+    };
+
+    rb_hash_foreach(obj, json_object_i_fast, (VALUE)&arg);
+
+    --state->depth;
+    fbuffer_append_char(buffer, '}');
+}
+
+
+static int
+json_object_i_pretty(VALUE key, VALUE val, VALUE _arg)
+{
+    struct hash_foreach_arg *arg = (struct hash_foreach_arg *)_arg;
+    struct generate_json_data *data = arg->data;
+
+    FBuffer *buffer = data->buffer;
+    JSON_Generator_State *state = data->state;
+
+    long depth = state->depth;
+    int j;
+
+    if (arg->iter > 0) fbuffer_append_char(buffer, ',');
+    if (RB_UNLIKELY(state->object_nl)) {
+        fbuffer_append_str(buffer, state->object_nl);
+    }
+    if (RB_UNLIKELY(state->indent)) {
+        for (j = 0; j < depth; j++) {
+            fbuffer_append_str(buffer, state->indent);
+        }
+    }
+
+    generate_json_object_key(buffer, data, state, key);
+    if (RB_UNLIKELY(state->space_before)) fbuffer_append_str(buffer, state->space_before);
+    fbuffer_append_char(buffer, ':');
+    if (RB_UNLIKELY(state->space)) fbuffer_append_str(buffer, state->space);
+    generate_json(buffer, data, state, val);
+
+    arg->iter++;
+    return ST_CONTINUE;
+}
+
+static void
+generate_json_object_pretty(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
 {
     int j;
     long depth = increase_depth(state);
-
-    if (RHASH_SIZE(obj) == 0) {
-        fbuffer_append(buffer, "{}", 2);
-        --state->depth;
-        return;
-    }
 
     fbuffer_append_char(buffer, '{');
 
@@ -868,7 +913,8 @@ static void generate_json_object(FBuffer *buffer, struct generate_json_data *dat
         .data = data,
         .iter = 0,
     };
-    rb_hash_foreach(obj, json_object_i, (VALUE)&arg);
+
+    rb_hash_foreach(obj, json_object_i_pretty, (VALUE)&arg);
 
     depth = --state->depth;
     if (RB_UNLIKELY(state->object_nl)) {
@@ -882,41 +928,101 @@ static void generate_json_object(FBuffer *buffer, struct generate_json_data *dat
     fbuffer_append_char(buffer, '}');
 }
 
-static void generate_json_array(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
+static void
+generate_json_object(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
 {
-    int i, j;
-    long depth = increase_depth(state);
-
-    if (RARRAY_LEN(obj) == 0) {
-        fbuffer_append(buffer, "[]", 2);
+    if (RHASH_SIZE(obj) == 0) {
+        increase_depth(state);
+        fbuffer_append(buffer, "{}", 2);
         --state->depth;
         return;
     }
 
+    if(state->pretty) {
+        generate_json_object_pretty(buffer, data, state, obj);
+    } else {
+        generate_json_object_fast(buffer, data, state, obj);
+    }
+}
+
+static inline bool
+json_array_pretty_mode(JSON_Generator_State *state)
+{
+    /* each state attribute that is used by generate_json_array_pretty must be tested here. */
+    return state->array_nl || state->indent;
+}
+
+static inline void
+generate_json_array_pretty(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
+{
+    int i, j;
+    long depth = increase_depth(state);
+
     fbuffer_append_char(buffer, '[');
-    if (RB_UNLIKELY(state->array_nl)) fbuffer_append_str(buffer, state->array_nl);
+
+    VALUE array_nl = state->array_nl;
+    VALUE indent = state->indent;
+
+    if (RB_UNLIKELY(array_nl)) fbuffer_append_str(buffer, array_nl);
     for(i = 0; i < RARRAY_LEN(obj); i++) {
         if (i > 0) {
             fbuffer_append_char(buffer, ',');
-            if (RB_UNLIKELY(state->array_nl)) fbuffer_append_str(buffer, state->array_nl);
+            if (RB_UNLIKELY(array_nl)) fbuffer_append_str(buffer, array_nl);
         }
-        if (RB_UNLIKELY(state->indent)) {
+        if (RB_UNLIKELY(indent)) {
             for (j = 0; j < depth; j++) {
-                fbuffer_append_str(buffer, state->indent);
+                fbuffer_append_str(buffer, indent);
             }
         }
         generate_json(buffer, data, state, RARRAY_AREF(obj, i));
     }
     state->depth = --depth;
-    if (RB_UNLIKELY(state->array_nl)) {
-        fbuffer_append_str(buffer, state->array_nl);
-        if (RB_UNLIKELY(state->indent)) {
+    if (RB_UNLIKELY(array_nl)) {
+        fbuffer_append_str(buffer, array_nl);
+        if (RB_UNLIKELY(indent)) {
             for (j = 0; j < depth; j++) {
-                fbuffer_append_str(buffer, state->indent);
+                fbuffer_append_str(buffer, indent);
             }
         }
     }
+
     fbuffer_append_char(buffer, ']');
+}
+
+static inline void
+generate_json_array_fast(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
+{
+    int i;
+    long depth = increase_depth(state);
+
+    fbuffer_append_char(buffer, '[');
+
+
+    for(i = 0; i < RARRAY_LEN(obj); i++) {
+        if (i > 0) {
+            fbuffer_append_char(buffer, ',');
+        }
+        generate_json(buffer, data, state, RARRAY_AREF(obj, i));
+    }
+    state->depth = --depth;
+
+    fbuffer_append_char(buffer, ']');
+}
+
+static void generate_json_array(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
+{
+    if (RARRAY_LEN(obj) == 0) {
+        increase_depth(state);
+        fbuffer_append(buffer, "[]", 2);
+        --state->depth;
+        return;
+    }
+
+    if (json_array_pretty_mode(state)) {
+        generate_json_array_pretty(buffer, data, state, obj);
+    } else {
+        generate_json_array_fast(buffer, data, state, obj);
+    }
 }
 
 static inline int enc_utf8_compatible_p(int enc_idx)
@@ -1654,11 +1760,11 @@ static void configure_state(JSON_Generator_State *state, VALUE config)
 
     Check_Type(config, T_HASH);
 
-    if (!RHASH_SIZE(config)) return;
-
     // We assume in most cases few keys are set so it's faster to go over
     // the provided keys than to check all possible keys.
     rb_hash_foreach(config, configure_state_i, (VALUE)state);
+
+    state->pretty = json_object_pretty_mode(state) || json_array_pretty_mode(state);
 }
 
 static VALUE cState_configure(VALUE self, VALUE opts)
