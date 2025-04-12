@@ -52,7 +52,6 @@ static inline uint32_t decimalLength17(const uint64_t v) {
 }
 
 static inline uint64_t mulShift(const uint64_t m, const uint64_t* const mul, const int32_t j) {
-    // m is maximum 55 bits
     uint64_t high1;
     uint64_t low1 = umul128(m, mul[1], &high1);
     uint64_t high0;
@@ -123,7 +122,7 @@ int ryu_dtoa(double value, char* buffer) {
     uint32_t mv = (uint32_t)(m2 >> 32);
     uint32_t mmShift = ieeeMantissa != 0 || ieeeExponent <= 1;
     uint32_t vr, vp, vm;
-    int32_t e10;
+    int32_t e10 = 0;
     bool vmIsTrailingZeros = false;
     bool vrIsTrailingZeros = false;
 
@@ -136,7 +135,7 @@ int ryu_dtoa(double value, char* buffer) {
     // Step 7: Handle the integer part
     uint32_t output = mv;
     uint32_t olength = decimalLength17(output);
-    int32_t exp = e10 + olength - 1;
+    int32_t exp = e10 + (int32_t)olength - 1;
 
     // Step 8: Generate the digits
     uint32_t i = 0;
@@ -163,7 +162,7 @@ int ryu_dtoa(double value, char* buffer) {
     }
 
     // Step 9: Add decimal point and exponent if needed
-    if (exp < -4 || exp >= olength) {
+    if (exp < -4 || exp >= (int32_t)olength) {
         // Scientific notation
         buffer[index + 1] = '.';
         memmove(buffer + index + 2, buffer + index + 1, olength - 1);
@@ -190,7 +189,7 @@ int ryu_dtoa(double value, char* buffer) {
             buffer[index + 2 + i] = '0';
         }
         index += olength + 2 + (-exp - 1);
-    } else if (exp + 1 < olength) {
+    } else if (exp + 1 < (int32_t)olength) {
         // Decimal point in the middle
         memmove(buffer + index + exp + 2, buffer + index + exp + 1, olength - exp - 1);
         buffer[index + exp + 1] = '.';
