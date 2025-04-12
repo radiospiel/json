@@ -80,7 +80,7 @@ jeaiii_ultoa(char *b, u64_t n)
 {
     if (n < u32(1e2)) {
         COPY(b, digits_fd[n]);
-        return n < 10 ? b + 1 : b + 2;
+        return b + 1 + (n >= 10);
     }
 
     if (n < u32(1e6)) {
