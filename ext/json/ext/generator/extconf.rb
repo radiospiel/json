@@ -6,5 +6,9 @@ if RUBY_ENGINE == 'truffleruby'
 else
   append_cflags("-std=c99")
   $defs << "-DJSON_GENERATOR"
+  
+  # Add Ryu implementation files
+  $srcs = %w[generator.c ryu.c ryu_platform.c]
+  
   create_makefile 'json/ext/generator'
 end

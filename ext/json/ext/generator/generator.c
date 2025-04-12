@@ -1,6 +1,7 @@
 #include "ruby.h"
 #include "../fbuffer/fbuffer.h"
 #include "../vendor/fpconv.c"
+#include "ryu.h"
 
 #include <math.h>
 #include <ctype.h>
@@ -1075,17 +1076,10 @@ static void generate_json_float(FBuffer *buffer, struct generate_json_data *data
         return;
     }
 
-    /* This implementation writes directly into the buffer. We reserve
-     * the 24 characters that fpconv_dtoa states as its maximum, plus
-     * 2 more characters for the potential ".0" suffix.
-     */
-    fbuffer_inc_capa(buffer, 26);
+    /* Use Ryu for fast floating-point conversion */
+    fbuffer_inc_capa(buffer, 24); // Ryu needs less space than fpconv_dtoa
     char* d = buffer->ptr + buffer->len;
-    int len = fpconv_dtoa(value, d);
-
-    /* fpconv_dtoa converts a float to its shortest string representation,
-     * but it adds a ".0" if this is a plain integer.
-     */
+    int len = ryu_dtoa(value, d);
     buffer->len += len;
 }
 
