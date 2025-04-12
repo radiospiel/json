@@ -1098,6 +1098,20 @@ static void generate_json_fragment(FBuffer *buffer, struct generate_json_data *d
     fbuffer_append_str(buffer, fragment);
 }
 
+#define xassert(check) \
+    do { \
+        if(!(check)) { \
+            fprintf(stderr, "%s(%d):  %s failed.\n", "ext/json/ext/generator/generator.c", __LINE__, #check); \
+        } \
+    } while(0)
+
+#define xassert2(msg, check) \
+    do { \
+        if(!(check)) { \
+            fprintf(stderr, "%s(%d): %s: %s failed.\n", "ext/json/ext/generator/generator.c", __LINE__, msg, #check); \
+        } \
+    } while(0)
+
 static void generate_json(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
 {
     bool as_json_called = false;
