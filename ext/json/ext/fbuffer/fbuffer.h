@@ -62,6 +62,7 @@ typedef struct FBufferStruct {
 static void fbuffer_free(FBuffer *fb);
 static void fbuffer_clear(FBuffer *fb);
 static void fbuffer_append(FBuffer *fb, const char *newstr, unsigned long len);
+static void fbuffer_append_2(FBuffer *fb, const char *newstr);
 static void fbuffer_append_long(FBuffer *fb, long number);
 static inline void fbuffer_append_char(FBuffer *fb, char newchr);
 static VALUE fbuffer_finalize(FBuffer *fb);
@@ -151,6 +152,13 @@ static void fbuffer_append(FBuffer *fb, const char *newstr, unsigned long len)
     }
 }
 
+static inline void fbuffer_append_2(FBuffer *fb, const char *newstr)
+{
+    fbuffer_inc_capa(fb, 2);
+    MEMCPY(fb->ptr + fb->len, newstr, char, 2);
+    fb->len += 2;
+}
+
 /* Appends a character into a buffer. The buffer needs to have sufficient capacity, via fbuffer_inc_capa(...). */
 static inline void fbuffer_append_reserved_char(FBuffer *fb, char chr)
 {
@@ -158,14 +166,16 @@ static inline void fbuffer_append_reserved_char(FBuffer *fb, char chr)
     fb->len += 1;
 }
 
-static void fbuffer_append_str(FBuffer *fb, VALUE str)
+static inline void fbuffer_append_str(FBuffer *fb, VALUE str)
 {
-    const char *newstr = StringValuePtr(str);
     unsigned long len = RSTRING_LEN(str);
+    if(len == 0) {
+        return;
+    }
 
-    RB_GC_GUARD(str);
-
+    const char *newstr = StringValuePtr(str);
     fbuffer_append(fb, newstr, len);
+    RB_GC_GUARD(str);
 }
 
 static inline void fbuffer_append_char(FBuffer *fb, char newchr)

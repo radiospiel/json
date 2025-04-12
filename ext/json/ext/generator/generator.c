@@ -113,8 +113,10 @@ typedef struct _search_state {
 
 static inline void search_flush(search_state *search)
 {
-    fbuffer_append(search->buffer, search->cursor, search->ptr - search->cursor);
-    search->cursor = search->ptr;
+    if(search->ptr > search->cursor) {
+        fbuffer_append(search->buffer, search->cursor, search->ptr - search->cursor);
+        search->cursor = search->ptr;
+    }
 }
 
 static const unsigned char escape_table_basic[256] = {
@@ -147,14 +149,14 @@ static inline unsigned char search_escape_basic(search_state *search)
 static inline void escape_UTF8_char_basic(search_state *search) {
     const unsigned char ch = (unsigned char)*search->ptr;
     switch (ch) {
-        case '"':  fbuffer_append(search->buffer, "\\\"", 2); break;
-        case '\\': fbuffer_append(search->buffer, "\\\\", 2); break;
-        case '/':  fbuffer_append(search->buffer, "\\/", 2);  break;
-        case '\b': fbuffer_append(search->buffer, "\\b", 2);  break;
-        case '\f': fbuffer_append(search->buffer, "\\f", 2);  break;
-        case '\n': fbuffer_append(search->buffer, "\\n", 2);  break;
-        case '\r': fbuffer_append(search->buffer, "\\r", 2);  break;
-        case '\t': fbuffer_append(search->buffer, "\\t", 2);  break;
+        case '"':  fbuffer_append_2(search->buffer, "\\\""); break;
+        case '\\': fbuffer_append_2(search->buffer, "\\\\"); break;
+        case '/':  fbuffer_append_2(search->buffer, "\\/");  break;
+        case '\b': fbuffer_append_2(search->buffer, "\\b");  break;
+        case '\f': fbuffer_append_2(search->buffer, "\\f");  break;
+        case '\n': fbuffer_append_2(search->buffer, "\\n");  break;
+        case '\r': fbuffer_append_2(search->buffer, "\\r");  break;
+        case '\t': fbuffer_append_2(search->buffer, "\\t");  break;
         default: {
             const char *hexdig = "0123456789abcdef";
             char scratch[6] = { '\\', 'u', '0', '0', 0, 0 };
@@ -196,14 +198,14 @@ static inline void escape_UTF8_char(search_state *search, unsigned char ch_len) 
     switch (ch_len) {
         case 1: {
             switch (ch) {
-                case '"':  fbuffer_append(search->buffer, "\\\"", 2); break;
-                case '\\': fbuffer_append(search->buffer, "\\\\", 2); break;
-                case '/':  fbuffer_append(search->buffer, "\\/", 2);  break;
-                case '\b': fbuffer_append(search->buffer, "\\b", 2);  break;
-                case '\f': fbuffer_append(search->buffer, "\\f", 2);  break;
-                case '\n': fbuffer_append(search->buffer, "\\n", 2);  break;
-                case '\r': fbuffer_append(search->buffer, "\\r", 2);  break;
-                case '\t': fbuffer_append(search->buffer, "\\t", 2);  break;
+                case '"':  fbuffer_append_2(search->buffer, "\\\""); break;
+                case '\\': fbuffer_append_2(search->buffer, "\\\\"); break;
+                case '/':  fbuffer_append_2(search->buffer, "\\/");  break;
+                case '\b': fbuffer_append_2(search->buffer, "\\b");  break;
+                case '\f': fbuffer_append_2(search->buffer, "\\f");  break;
+                case '\n': fbuffer_append_2(search->buffer, "\\n");  break;
+                case '\r': fbuffer_append_2(search->buffer, "\\r");  break;
+                case '\t': fbuffer_append_2(search->buffer, "\\t");  break;
                 default: {
                     const char *hexdig = "0123456789abcdef";
                     char scratch[6] = { '\\', 'u', '0', '0', 0, 0 };
@@ -335,14 +337,14 @@ static inline void full_escape_UTF8_char(search_state *search, unsigned char ch_
     switch (ch_len) {
         case 1: {
             switch (ch) {
-                case '"':  fbuffer_append(search->buffer, "\\\"", 2); break;
-                case '\\': fbuffer_append(search->buffer, "\\\\", 2); break;
-                case '/':  fbuffer_append(search->buffer, "\\/", 2);  break;
-                case '\b': fbuffer_append(search->buffer, "\\b", 2);  break;
-                case '\f': fbuffer_append(search->buffer, "\\f", 2);  break;
-                case '\n': fbuffer_append(search->buffer, "\\n", 2);  break;
-                case '\r': fbuffer_append(search->buffer, "\\r", 2);  break;
-                case '\t': fbuffer_append(search->buffer, "\\t", 2);  break;
+                case '"':  fbuffer_append_2(search->buffer, "\\\""); break;
+                case '\\': fbuffer_append_2(search->buffer, "\\\\"); break;
+                case '/':  fbuffer_append_2(search->buffer, "\\/");  break;
+                case '\b': fbuffer_append_2(search->buffer, "\\b");  break;
+                case '\f': fbuffer_append_2(search->buffer, "\\f");  break;
+                case '\n': fbuffer_append_2(search->buffer, "\\n");  break;
+                case '\r': fbuffer_append_2(search->buffer, "\\r");  break;
+                case '\t': fbuffer_append_2(search->buffer, "\\t");  break;
                 default: {
                     const char *hexdig = "0123456789abcdef";
                     char scratch[6] = { '\\', 'u', '0', '0', 0, 0 };
@@ -857,7 +859,7 @@ static void generate_json_object(FBuffer *buffer, struct generate_json_data *dat
     long depth = increase_depth(state);
 
     if (RHASH_SIZE(obj) == 0) {
-        fbuffer_append(buffer, "{}", 2);
+        fbuffer_append_2(buffer, "{}");
         --state->depth;
         return;
     }
@@ -888,7 +890,7 @@ static void generate_json_array(FBuffer *buffer, struct generate_json_data *data
     long depth = increase_depth(state);
 
     if (RARRAY_LEN(obj) == 0) {
-        fbuffer_append(buffer, "[]", 2);
+        fbuffer_append_2(buffer, "[]");
         --state->depth;
         return;
     }
