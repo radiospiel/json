@@ -1,7 +1,6 @@
 #include "ruby.h"
 #include "../fbuffer/fbuffer.h"
-#include "../vendor/fpconv.c"
-#include "ryu.h"
+#include "../vendor/ryu.h"
 
 #include <math.h>
 #include <ctype.h>
