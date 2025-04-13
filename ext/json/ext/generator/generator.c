@@ -838,6 +838,8 @@ static inline long increase_depth(JSON_Generator_State *state)
 static int
 json_object_i_fast(VALUE key, VALUE val, VALUE _arg)
 {
+    p("fi");
+
     struct hash_foreach_arg *arg = (struct hash_foreach_arg *)_arg;
     struct generate_json_data *data = arg->data;
 
@@ -857,6 +859,7 @@ json_object_i_fast(VALUE key, VALUE val, VALUE _arg)
 static void
 generate_json_object_fast(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
 {
+    p("f");
     fbuffer_append_char(buffer, '{');
     increase_depth(state);
 
@@ -995,6 +998,8 @@ generate_json_array_pretty(FBuffer *buffer, struct generate_json_data *data, JSO
 static inline void
 generate_json_array_fast(FBuffer *buffer, struct generate_json_data *data, JSON_Generator_State *state, VALUE obj)
 {
+    p("af");
+
     int i;
     long depth = increase_depth(state);
 
