@@ -5,6 +5,9 @@
 #include <math.h>
 #include <ctype.h>
 
+#define p(str) fprintf(stderr, "%s(%d): %s\n", "ext/json/ext/generator/generator.c", __LINE__, str)
+#define p(str) (void)0
+
 /* ruby api and some helpers */
 
 typedef struct JSON_Generator_StateStruct {
@@ -1756,15 +1759,21 @@ static int configure_state_i(VALUE key, VALUE val, VALUE _arg)
 
 static void configure_state(JSON_Generator_State *state, VALUE config)
 {
-    if (!RTEST(config)) return;
+    p("configure_state");
+    if (RTEST(config)) {
+        Check_Type(config, T_HASH);
 
-    Check_Type(config, T_HASH);
-
-    // We assume in most cases few keys are set so it's faster to go over
-    // the provided keys than to check all possible keys.
-    rb_hash_foreach(config, configure_state_i, (VALUE)state);
+        // We assume in most cases few keys are set so it's faster to go over
+        // the provided keys than to check all possible keys.
+        rb_hash_foreach(config, configure_state_i, (VALUE)state);
+    }
 
     state->pretty = json_object_pretty_mode(state) || json_array_pretty_mode(state);
+    if(state->pretty) {
+        p("pretty mode");
+    } else {
+        p("fast mode");
+    }
 }
 
 static VALUE cState_configure(VALUE self, VALUE opts)
