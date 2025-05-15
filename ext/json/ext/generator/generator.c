@@ -27,10 +27,6 @@ typedef struct JSON_Generator_StateStruct {
     bool strict;
 } JSON_Generator_State;
 
-#ifndef RB_UNLIKELY
-#define RB_UNLIKELY(cond) (cond)
-#endif
-
 static VALUE mJSON, cState, cFragment, mString_Extend, eGeneratorError, eNestingError, Encoding_UTF_8;
 
 static ID i_to_s, i_to_json, i_new, i_pack, i_unpack, i_create_id, i_extend, i_encode;
@@ -105,33 +101,6 @@ static void raise_generator_error(VALUE invalid_object, const char *fmt, ...)
 // (x | 8) - char that needs to be escaped.
 static const unsigned char CHAR_LENGTH_MASK = 7;
 static const unsigned char ESCAPE_MASK = 8;
-
-typedef struct _search_state {
-    const char *ptr;
-    const char *end;
-    const char *cursor;
-    FBuffer *buffer;
-
-#ifdef HAVE_SIMD
-    const char *chunk_base;
-    const char *chunk_end;
-    bool has_matches;
-
-#if defined(HAVE_SIMD_NEON)
-    uint64_t matches_mask;
-#elif defined(HAVE_SIMD_SSE2)
-    int matches_mask;
-#else
-#error "Unknown SIMD Implementation."
-#endif /* HAVE_SIMD_NEON */
-#endif /* HAVE_SIMD */
-} search_state;
-
-#if (defined(__GNUC__ ) || defined(__clang__))
-#define FORCE_INLINE __attribute__((always_inline))
-#else
-#define FORCE_INLINE
-#endif
 
 static inline FORCE_INLINE void search_flush(search_state *search)
 {
